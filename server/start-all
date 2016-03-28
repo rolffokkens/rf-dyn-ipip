@@ -6,9 +6,9 @@ ilip='172.16.0.254'
 olip='89.188.16.159'
 gwif='eth0'
 
-vardir = '/root/tunnels'
+vardir = '/var/lib/rf-dyn-ipip'
 tunlis = vardir + '/tunnels.lis'
-tundir = vardir + '/tunnels.d'
+tundir = vardir + '/clients.d'
 
 def inc_ip (ip):
   a = ip.split ('.')
@@ -18,7 +18,7 @@ def inc_ip (ip):
 
 def exec_cmd (cmd):
   try:
-    subprocess.check_output (cmd, shell=True)
+    subprocess.check_output (cmd, shell=True, stderr=subprocess.STDOUT)
     return True
   except subprocess.CalledProcessError:
     return False

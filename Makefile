@@ -7,19 +7,20 @@ install-client:
 	do \
 		mkdir -p $(DESTDIR)/$$i ; \
 	done
-	cp client/rf-dyn-ipip         $(DESTDIR)/usr/bin/
-	cp client/rf-dyn-ipip.conf    $(DESTDIR)/etc/
-	cp client/rf-dyn-ipip.service $(DESTDIR)/usr/lib/systemd/system/
+	install -m 555 client/rf-dyn-ipip         $(DESTDIR)/usr/bin/
+	install -m 644 client/rf-dyn-ipip.conf    $(DESTDIR)/etc/
+	install -m 644 client/rf-dyn-ipip.service $(DESTDIR)/usr/lib/systemd/system/
 
 install-server:
 	@for i in /etc/httpd/conf.d /var/www/cgi-bin/ /etc/sudoers.d \
-	          /usr/share/rf-dyn-ipip /var/lib/rf-dyn-ipip /etc/sysctl.d ; \
+	          /usr/share/rf-dyn-ipip /var/lib/rf-dyn-ipip/clients.d \
+	          /etc/sysctl.d ; \
 	do \
 		mkdir -p $(DESTDIR)/$$i ; \
 	done
-	cp server/httpd.conf      $(DESTDIR)/etc/httpd/conf.d/rf-dyn-ipip.conf
-	cp server/rf-dyn-ipip.cgi $(DESTDIR)/var/www/cgi-bin/
-	cp server/set-remote      $(DESTDIR)/usr/share/rf-dyn-ipip/
-	cp server/start-all       $(DESTDIR)/usr/share/rf-dyn-ipip/
-	cp server/sudo.conf       $(DESTDIR)/etc/sudoers.d/rf-dyn-ipip
-	cp server/sysctl.conf     $(DESTDIR)/etc/sysctl.d/rf-dyn-ipip.conf
+	install -m 444 server/httpd.conf      $(DESTDIR)/etc/httpd/conf.d/rf-dyn-ipip.conf
+	install -m 555 server/rf-dyn-ipip.cgi $(DESTDIR)/var/www/cgi-bin/
+	install -m 500 server/set-remote      $(DESTDIR)/usr/share/rf-dyn-ipip/
+	install -m 500 server/start-all       $(DESTDIR)/usr/share/rf-dyn-ipip/
+	install -m 400 server/sudo.conf       $(DESTDIR)/etc/sudoers.d/rf-dyn-ipip
+	install -m 444 server/sysctl.conf     $(DESTDIR)/etc/sysctl.d/rf-dyn-ipip.conf
