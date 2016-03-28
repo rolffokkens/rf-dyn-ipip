@@ -1,0 +1,114 @@
+#!/usr/bin/python3
+
+import requests, time, signal, os, subprocess, sys
+
+class SetLocalIPFailure (Exception):
+  def __init__(self, value):
+    self.value = value
+  def __str__(self):
+    return repr(self.value)
+
+class ConfigError (Exception):
+  def __init__(self, value):
+    self.value = value
+  def __str__(self):
+    return repr(self.value)
+
+class PosixSigHUP (Exception):
+  def __init__(self, value):
+    self.value = value
+  def __str__(self):
+    return repr(self.value)
+
+def sighup_handler (signum, frame):
+    raise PosixSigHUP (signum)
+
+def read_config (filename):
+  try:
+    ret = {}
+    for l in open (filename, "r"):
+      l = l.split ('#')[0].rstrip ()
+      if l == '':
+        continue
+      i = l.split('=')
+      if len (i) != 2:
+        continue
+      ret[i[0]]=i[1]
+    return ret
+  except FileNotFoundError:
+    raise ConfigError ('Unable to open config file "%s"' % filename)
+
+def register_endpoint (regurl, username, password):
+  payload = {'password': password}
+  url     = regurl + '?id=' + username
+
+  try:
+    r = requests.post(url, data=payload)
+  except requests.exceptions.ConnectionError as err:
+    raise SetLocalIPFailure ('Failure accessing "%s"' % url)
+
+  ret = {}
+
+  for l in r.text.split('\n'):
+    i = l.split('=')
+    if len (i) != 2:
+      continue
+    ret[i[0]]=i[1]
+
+  if 'status' not in ret:
+    raise SetLocalIPFailure ('"status" missing in data')
+
+  if ret['status'] != 'OK':
+    raise SetLocalIPFailure (ret['status'])
+
+  return (ret.get('iplocal'), ret.get('ipremote'))
+
+
+def do_ping (src_ip, dst_ip):
+  try:
+    r = subprocess.check_output ('ping -W 1 -c 1 -I ' + src_ip + ' ' + dst_ip, shell = True)
+    return True
+  except subprocess.CalledProcessError:
+    return False
+
+def get_config_parameter (config_file, conf, parameter):
+  try:
+    return conf[parameter]
+  except KeyError:
+    raise ConfigError ('Missing parameter "%s" in config file "%s"' % (parameter, config_file))
+
+def mainloop (config_file):
+  signal.signal(signal.SIGHUP, sighup_handler)
+
+  try:
+    while True:
+      conf = read_config (config_file)
+
+      username = get_config_parameter (config_file, conf, 'username')
+      password = get_config_parameter (config_file, conf, 'password')
+      regurl   = get_config_parameter (config_file, conf, 'regurl')
+
+      (iplocal, ipremote) = register_endpoint (regurl, username, password)
+      try:
+        while True:
+          time.sleep (5)
+
+          if do_ping (iplocal, ipremote):
+              continue
+
+          print ('Ping failed', file=sys.stderr, flush=True)
+          (iplocal, ipremote) = register_endpoint (regurl, username, password)
+      except PosixSigHUP:
+        print ('Reread config', file=sys.stderr, flush=True)
+  except SetLocalIPFailure as err:
+    print (err.value, file=sys.stderr, flush=True)
+    exit (1)
+  except ConfigError as err:
+    print (err.value, file=sys.stderr, flush=True)
+    exit (1)
+
+if len(sys.argv) != 2:
+  print ("Bad number of arguments", file=sys.stderr, flush=True)
+  exit (1)
+
+mainloop (sys.argv[1])

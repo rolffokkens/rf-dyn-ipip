@@ -1,0 +1,12 @@
+[Unit]
+Description=RF-dyn-ipip (Experimental Dynamic IPIP tunnel utility)
+Wants=network.target network-online.target
+After=network.target network-online.target time-sync.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/rf-dyn-ipip /etc/rf-dyn-ipip.conf
+ExecReload=/usr/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target
