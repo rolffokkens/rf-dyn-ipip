@@ -1,0 +1,68 @@
+#!/usr/bin/python3.4
+
+import subprocess
+
+ilip='172.16.0.254'
+olip='89.188.16.159'
+gwif='eth0'
+
+vardir = '/root/tunnels'
+tunlis = vardir + '/tunnels.lis'
+tundir = vardir + '/tunnels.d'
+
+def inc_ip (ip):
+  a = ip.split ('.')
+  a[3] = int (a[3]) + 1
+
+  return '%s.%s.%s.%d' % tuple (a)
+
+def exec_cmd (cmd):
+  try:
+    subprocess.check_output (cmd, shell=True)
+    return True
+  except subprocess.CalledProcessError:
+    return False
+
+for chain in ['INPUT', 'OUTPUT', 'FORWARD']:
+  exec_cmd ('iptables -F %s' % chain)
+
+for chain in ['IN_ipip', 'FW_ipip']:
+  exec_cmd ('iptables -N %s'         % chain)
+  exec_cmd ('iptables -F %s'         % chain)
+  exec_cmd ('iptables -A %s -j DROP' % chain)
+
+exec_cmd ('iptables -A INPUT   -i ipip+ -j IN_ipip')
+exec_cmd ('iptables -A FORWARD -i ipip+ -j FW_ipip')
+
+for tmp in open (tunlis, 'r'):
+  tmp = tmp.rstrip().split (' ')
+  if len (tmp) != 4:
+    continue
+  (ipip, username, net, irip) = tmp
+
+  tuncfgfile = tundir + '/' + username + '.conf'
+
+  ilip = inc_ip (irip)
+
+  for tmp in open (tuncfgfile, 'r'):
+    tmp = tmp.rstrip().split (' ')
+    if len (tmp) != 2:
+      continue
+    (orip, password) = tmp
+
+    exec_cmd ('ip tunnel add %s mode ipip remote %s local %s' % (ipip, orip, olip))
+    exec_cmd ('ip link set %s up'                             % (ipip)            )
+    exec_cmd ('ip route add %s dev %s'                        % (net, ipip)       )
+    exec_cmd ('ip route add %s dev %s'                        % (irip, ipip)      )
+    exec_cmd ('ip addr  add %s dev %s'                        % (ilip, ipip)      )
+
+    for i in ['IN', 'FW']:
+      exec_cmd ('iptables -N %s_%s'                           % (i, ipip)         )
+      exec_cmd ('iptables -F %s_%s'                           % (i, ipip)         )
+      exec_cmd ('iptables -D %s_ipip -i %s -j %s_%s'          % (i, ipip, i, ipip))
+      exec_cmd ('iptables -I %s_ipip -i %s -j %s_%s'          % (i, ipip, i, ipip))
+
+    exec_cmd (  'iptables -I IN_%s -i %s       -s %s -d %s -p icmp -j ACCEPT'
+              % (ipip, ipip, irip, ilip) )
+    exec_cmd (  'iptables -I FW_%s -i %s -o %s -s %s               -j ACCEPT'
+              % (ipip, ipip, gwif, net) )
