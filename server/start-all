@@ -5,6 +5,7 @@ import subprocess
 ilip='172.16.0.254'
 olip='89.188.16.159'
 gwif='eth0'
+mss='1440'
 
 vardir = '/var/lib/rf-dyn-ipip'
 tunlis = vardir + '/tunnels.lis'
@@ -30,6 +31,9 @@ for chain in ['IN_ipip', 'FW_ipip']:
   exec_cmd ('iptables -N %s'         % chain)
   exec_cmd ('iptables -F %s'         % chain)
   exec_cmd ('iptables -A %s -j DROP' % chain)
+
+  exec_cmd ('iptables -t mangle -F POSTROUTING')
+  exec_cmd ('iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ' + mss)
 
 exec_cmd ('iptables -A INPUT   -i ipip+ -j IN_ipip')
 exec_cmd ('iptables -A FORWARD -i ipip+ -j FW_ipip')
