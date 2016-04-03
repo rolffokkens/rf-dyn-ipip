@@ -43,9 +43,14 @@ def register_endpoint (regurl, username, password):
   url     = regurl + '?id=' + username
 
   try:
-    r = requests.post(url, data=payload)
-  except requests.exceptions.ConnectionError as err:
-    raise SetLocalIPFailure ('Failure accessing "%s"' % url)
+    r = requests.post(url, data=payload, timeout=1)
+  except requests.exceptions.ConnectTimeout:
+    raise SetLocalIPFailure ('Failure accessing "%s": Timeout' % url)
+  except requests.exceptions.ConnectionError:
+    raise SetLocalIPFailure ('Failure accessing "%s": Failed to connect' % url)
+
+  if r.status_code != 200:
+    raise SetLocalIPFailure ('Failure accessing "%s": Status %d' % (url, r.status_code))
 
   ret = {}
 
@@ -61,6 +66,8 @@ def register_endpoint (regurl, username, password):
   if ret['status'] != 'OK':
     raise SetLocalIPFailure (ret['status'])
 
+  print ("Local IP registration succeeded", file=sys.stderr, flush=True)
+
   return (ret.get('iplocal'), ret.get('ipremote'))
 
 
@@ -71,10 +78,12 @@ def do_ping (src_ip, dst_ip):
   except subprocess.CalledProcessError:
     return False
 
-def get_config_parameter (config_file, conf, parameter):
+def get_config_parameter (config_file, conf, parameter, default = None):
   try:
     return conf[parameter]
   except KeyError:
+    if default != None:
+      return default
     raise ConfigError ('Missing parameter "%s" in config file "%s"' % (parameter, config_file))
 
 def mainloop (config_file):
@@ -84,9 +93,10 @@ def mainloop (config_file):
     while True:
       conf = read_config (config_file)
 
-      username = get_config_parameter (config_file, conf, 'username')
-      password = get_config_parameter (config_file, conf, 'password')
-      regurl   = get_config_parameter (config_file, conf, 'regurl')
+      username    = get_config_parameter (config_file, conf, 'username')
+      password    = get_config_parameter (config_file, conf, 'password')
+      regurl      = get_config_parameter (config_file, conf, 'regurl')
+      retry_delay = get_config_parameter (config_file, conf, 'retry_delay', '60')
 
       (iplocal, ipremote) = register_endpoint (regurl, username, password)
       try:
@@ -97,7 +107,12 @@ def mainloop (config_file):
               continue
 
           print ('Ping failed', file=sys.stderr, flush=True)
-          (iplocal, ipremote) = register_endpoint (regurl, username, password)
+          try:
+            (iplocal, ipremote) = register_endpoint (regurl, username, password)
+          except SetLocalIPFailure as err:
+            print (err.value, file=sys.stderr, flush=True)
+            time.sleep (float (retry_delay))
+
       except PosixSigHUP:
         print ('Reread config', file=sys.stderr, flush=True)
   except SetLocalIPFailure as err:
