@@ -38,7 +38,7 @@ def exec_cmd (cmd):
   r = subprocess.check_output (cmd, shell=True, stderr=subprocess.STDOUT)
 
 try:
-  (ipip, username, net, ilip) = get_file_entry (tunlis, 1, username)
+  (ipip, username, net, ilip, ipip6, net6) = get_file_entry (tunlis, 1, username)
   irip = inc_ip (ilip)
 
   tuncfgfile = tundir + '/' + username + '.conf'
@@ -47,10 +47,11 @@ try:
 
   if nrip != None and nrip != orip:
     exec_cmd ('ip tunnel change %s remote %s' % (ipip, nrip))
+    exec_cmd ('ip tunnel change %s remote %s' % (ipip6, nrip))
     open (tuncfgfile, 'w').write ('%s %s\n' % (nrip, password))
 
-  print (   'status=OK\npubnet=%s\niplocal=%s\nipremote=%s' \
-          % (net, ilip, irip))
+  print (   'status=OK\nip4pubnet=%s\nip4local=%s\nip4remote=%s\nip6pubnet=%s' \
+          % (net, ilip, irip, net6))
 
 except AuthError:
   print ('status=Authentication error', file=sys.stderr)

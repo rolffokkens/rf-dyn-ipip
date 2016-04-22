@@ -20,6 +20,7 @@ def inc_ip (ip):
 def exec_cmd (cmd):
   try:
     subprocess.check_output (cmd, shell=True, stderr=subprocess.STDOUT)
+#    print (cmd)
     return True
   except subprocess.CalledProcessError:
     return False
@@ -38,11 +39,22 @@ for chain in ['IN_ipip', 'FW_ipip']:
 exec_cmd ('iptables -A INPUT   -i ipip+ -j IN_ipip')
 exec_cmd ('iptables -A FORWARD -i ipip+ -j FW_ipip')
 
+for chain in ['IN_ip6ip', 'FW_ip6ip']:
+  exec_cmd ('ip6tables -N %s'         % chain)
+  exec_cmd ('ip6tables -F %s'         % chain)
+  exec_cmd ('ip6tables -A %s -j DROP' % chain)
+
+  exec_cmd ('ip6tables -t mangle -F POSTROUTING')
+  exec_cmd ('ip6tables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ' + mss)
+
+exec_cmd ('ip6tables -A INPUT   -i ip6ip+ -j IN_ip6ip')
+exec_cmd ('ip6tables -A FORWARD -i ip6ip+ -j FW_ip6ip')
+
 for tmp in open (tunlis, 'r'):
   tmp = tmp.rstrip().split (' ')
-  if len (tmp) != 4:
+  if len (tmp) != 6:
     continue
-  (ipip, username, net, irip) = tmp
+  (ipip, username, net, irip, ipip6, net6) = tmp
 
   tuncfgfile = tundir + '/' + username + '.conf'
 
@@ -54,19 +66,34 @@ for tmp in open (tunlis, 'r'):
       continue
     (orip, password) = tmp
 
-    exec_cmd ('ip tunnel add %s mode ipip remote %s local %s' % (ipip, orip, olip))
-    exec_cmd ('ip link set %s up'                             % (ipip)            )
-    exec_cmd ('ip route add %s dev %s'                        % (net, ipip)       )
-    exec_cmd ('ip route add %s dev %s'                        % (irip, ipip)      )
-    exec_cmd ('ip addr  add %s dev %s'                        % (ilip, ipip)      )
+    exec_cmd ('ip tunnel add %s mode ipip remote %s local %s' % (ipip, orip, olip)  )
+    exec_cmd ('ip link set %s up'                             % (ipip)              )
+    exec_cmd ('ip route add %s dev %s'                        % (net, ipip)         )
+    exec_cmd ('ip route add %s dev %s'                        % (irip, ipip)        )
+    exec_cmd ('ip addr  add %s dev %s'                        % (ilip, ipip)        )
 
     for i in ['IN', 'FW']:
-      exec_cmd ('iptables -N %s_%s'                           % (i, ipip)         )
-      exec_cmd ('iptables -F %s_%s'                           % (i, ipip)         )
-      exec_cmd ('iptables -D %s_ipip -i %s -j %s_%s'          % (i, ipip, i, ipip))
-      exec_cmd ('iptables -I %s_ipip -i %s -j %s_%s'          % (i, ipip, i, ipip))
+      exec_cmd ('iptables -N %s_%s'                           % (i, ipip)           )
+      exec_cmd ('iptables -F %s_%s'                           % (i, ipip)           )
+      exec_cmd ('iptables -D %s_ipip -i %s -j %s_%s'          % (i, ipip, i, ipip)  )
+      exec_cmd ('iptables -I %s_ipip -i %s -j %s_%s'          % (i, ipip, i, ipip)  )
 
     exec_cmd (  'iptables -I IN_%s -i %s       -s %s -d %s -p icmp -j ACCEPT'
               % (ipip, ipip, irip, ilip) )
     exec_cmd (  'iptables -I FW_%s -i %s -o %s -s %s               -j ACCEPT'
               % (ipip, ipip, gwif, net) )
+
+    exec_cmd ('ip tunnel add %s mode sit remote %s local %s'  % (ipip6, orip, olip) )
+    exec_cmd ('ip link set %s up'                             % (ipip6)             )
+    exec_cmd ('ip route add %s dev %s'                        % (net6, ipip6)       )
+
+    for i in ['IN', 'FW']:
+      exec_cmd ('ip6tables -N %s_%s'                          % (i, ipip6)          )
+      exec_cmd ('ip6tables -F %s_%s'                          % (i, ipip6)          )
+      exec_cmd ('ip6tables -D %s_ip6ip -i %s -j %s_%s'        % (i, ipip6, i, ipip6))
+      exec_cmd ('ip6tables -I %s_ip6ip -i %s -j %s_%s'        % (i, ipip6, i, ipip6))
+
+    exec_cmd (  'ip6tables -I IN_%s -i %s       -s %s               -j ACCEPT'
+              % (ipip6, ipip6, net6) )
+    exec_cmd (  'ip6tables -I FW_%s -i %s -o %s -s %s               -j ACCEPT'
+              % (ipip6, ipip6, gwif, net6) )
