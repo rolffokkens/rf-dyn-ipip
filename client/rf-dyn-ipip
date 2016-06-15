@@ -68,7 +68,7 @@ def register_endpoint (regurl, username, password):
 
   print ("Local IP registration succeeded", file=sys.stderr, flush=True)
 
-  return (ret.get('iplocal'), ret.get('ipremote'))
+  return (ret.get('ip4local'), ret.get('ip4remote'))
 
 
 def do_ping (src_ip, dst_ip):
