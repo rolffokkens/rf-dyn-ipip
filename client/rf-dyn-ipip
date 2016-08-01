@@ -44,8 +44,10 @@ def register_endpoint (regurl, username, password):
 
   try:
     r = requests.post(url, data=payload, timeout=1)
+  except requests.exceptions.ReadTimeout:
+    raise SetLocalIPFailure ('Failure accessing "%s": ReadTimeout' % url)
   except requests.exceptions.ConnectTimeout:
-    raise SetLocalIPFailure ('Failure accessing "%s": Timeout' % url)
+    raise SetLocalIPFailure ('Failure accessing "%s": ConnectTimeout' % url)
   except requests.exceptions.ConnectionError:
     raise SetLocalIPFailure ('Failure accessing "%s": Failed to connect' % url)
 
