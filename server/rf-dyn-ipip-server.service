@@ -1,0 +1,11 @@
+[Unit]
+Description=RF-dyn-ipip-server (Experimental Dynamic IPIP tunnel utility)
+Wants=network.target network-online.target
+After=network.target network-online.target time-sync.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/share/rf-dyn-ipip/start-all
+
+[Install]
+WantedBy=multi-user.target
