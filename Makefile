@@ -18,10 +18,10 @@ install-server:
 	do \
 		mkdir -p $(DESTDIR)/$$i ; \
 	done
-	install -m 444 server/httpd.conf          $(DESTDIR)/etc/httpd/conf.d/rf-dyn-ipip.conf
-	install -m 555 server/rf-dyn-ipip.cgi     $(DESTDIR)/var/www/cgi-bin/
-	install -m 500 server/set-remote          $(DESTDIR)/usr/share/rf-dyn-ipip/
-	install -m 500 server/start-all           $(DESTDIR)/usr/share/rf-dyn-ipip/
-	install -m 400 server/sudo.conf           $(DESTDIR)/etc/sudoers.d/rf-dyn-ipip
-	install -m 444 server/sysctl.conf         $(DESTDIR)/etc/sysctl.d/rf-dyn-ipip.conf
-	install -m 644 rf-dyn-ipip-server.service $(DESTDIR)/usr/lib/systemd/system/rf-dyn-ipip-server.service
+	install -m 444 server/httpd.conf                 $(DESTDIR)/etc/httpd/conf.d/rf-dyn-ipip.conf
+	install -m 555 server/rf-dyn-ipip.cgi            $(DESTDIR)/var/www/cgi-bin/
+	install -m 500 server/set-remote                 $(DESTDIR)/usr/share/rf-dyn-ipip/
+	install -m 500 server/start-all                  $(DESTDIR)/usr/share/rf-dyn-ipip/
+	install -m 400 server/sudo.conf                  $(DESTDIR)/etc/sudoers.d/rf-dyn-ipip
+	install -m 444 server/sysctl.conf                $(DESTDIR)/etc/sysctl.d/rf-dyn-ipip.conf
+	install -m 644 server/rf-dyn-ipip-server.service $(DESTDIR)/usr/lib/systemd/system/rf-dyn-ipip-server.service
