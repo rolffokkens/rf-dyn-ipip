@@ -44,10 +44,10 @@ def register_endpoint (regurl, username, password):
 
   try:
     r = requests.post(url, data=payload, timeout=1)
-  except requests.exceptions.ReadTimeout:
-    raise SetLocalIPFailure ('Failure accessing "%s": ReadTimeout' % url)
   except requests.exceptions.ConnectTimeout:
-    raise SetLocalIPFailure ('Failure accessing "%s": ConnectTimeout' % url)
+    raise SetLocalIPFailure ('Failure accessing "%s": Connect timeout' % url)
+  except requests.exceptions.ReadTimeout:
+    raise SetLocalIPFailure ('Failure accessing "%s": Read timeout' % url)
   except requests.exceptions.ConnectionError:
     raise SetLocalIPFailure ('Failure accessing "%s": Failed to connect' % url)
 
@@ -70,12 +70,12 @@ def register_endpoint (regurl, username, password):
 
   print ("Local IP registration succeeded", file=sys.stderr, flush=True)
 
-  return (ret.get('ip4local'), ret.get('ip4remote'))
+  return (ret.get('ip4local'), ret.get('ip4remote'), ret.get('ip6local'), ret.get('ip6remote'))
 
 
-def do_ping (src_ip, dst_ip):
+def do_ping (version, src_ip, dst_ip):
   try:
-    r = subprocess.check_output ('ping -W 1 -c 1 -I ' + src_ip + ' ' + dst_ip, shell = True)
+    r = subprocess.check_output ('ping' + version + ' -W 1 -c 1 -I ' + src_ip + ' ' + dst_ip, shell = True)
     return True
   except subprocess.CalledProcessError:
     return False
@@ -100,17 +100,18 @@ def mainloop (config_file):
       regurl      = get_config_parameter (config_file, conf, 'regurl')
       retry_delay = get_config_parameter (config_file, conf, 'retry_delay', '60')
 
-      (iplocal, ipremote) = register_endpoint (regurl, username, password)
+      (iplocal, ipremote, ip6local, ip6remote) = register_endpoint (regurl, username, password)
+
       try:
         while True:
           time.sleep (5)
 
-          if do_ping (iplocal, ipremote):
+          if do_ping ('', iplocal, ipremote) and do_ping ('6', ip6local, ip6remote):
               continue
 
           print ('Ping failed', file=sys.stderr, flush=True)
           try:
-            (iplocal, ipremote) = register_endpoint (regurl, username, password)
+            (iplocal, ipremote, ip6local, ip6remote) = register_endpoint (regurl, username, password)
           except SetLocalIPFailure as err:
             print (err.value, file=sys.stderr, flush=True)
             time.sleep (float (retry_delay))
