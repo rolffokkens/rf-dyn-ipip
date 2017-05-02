@@ -1,15 +1,34 @@
 #!/usr/bin/python3
 
-import subprocess
+import subprocess, sys
 
-ilip='172.16.0.254'
 olip='89.188.16.159'
-gwif='eth0'
 mss='1440'
 
 vardir = '/var/lib/rf-dyn-ipip'
 tunlis = vardir + '/tunnels.lis'
 tundir = vardir + '/clients.d'
+
+class ConfigError (Exception):
+  def __init__(self, value):
+    self.value = value
+  def __str__(self):
+    return repr(self.value)
+
+def read_config (filename):
+  try:
+    ret = {}
+    for l in open (filename, "r"):
+      l = l.split ('#')[0].rstrip ()
+      if l == '':
+        continue
+      i = l.split('=')
+      if len (i) != 2:
+        continue
+      ret[i[0]]=i[1]
+    return ret
+  except FileNotFoundError:
+    raise ConfigError ('Unable to open config file "%s"' % filename)
 
 def inc_ip (ip):
   a = ip.split ('.')
@@ -19,15 +38,30 @@ def inc_ip (ip):
 
 def exec_cmd (cmd):
   try:
-    subprocess.check_output (cmd, shell=True, stderr=subprocess.STDOUT)
-#
     print (cmd)
+    subprocess.check_output (cmd, shell=True, stderr=subprocess.STDOUT)
+
     return True
   except subprocess.CalledProcessError:
     return False
 
-for chain in ['INPUT', 'OUTPUT', 'FORWARD']:
-  exec_cmd ('iptables -F %s' % chain)
+def get_config_parameter (config_file, conf, parameter, default = None):
+  try:
+    return conf[parameter]
+  except KeyError:
+    if default != None:
+      return default
+    raise ConfigError ('Missing parameter "%s" in config file "%s"' % (parameter, config_file))
+
+if len(sys.argv) != 2:
+  print ("Bad number of arguments", file=sys.stderr, flush=True)
+  exit (1)
+
+conf = read_config (sys.argv[1])
+
+#for chain in ['INPUT', 'OUTPUT', 'FORWARD']:
+#  exec_cmd ('iptables  -F %s' % chain)
+#  exec_cmd ('ip6tables -F %s' % chain)
 
 for chain in ['IN_ipip', 'FW_ipip']:
   exec_cmd ('iptables -N %s'         % chain)
@@ -37,11 +71,8 @@ for chain in ['IN_ipip', 'FW_ipip']:
   exec_cmd ('iptables -t mangle -F POSTROUTING')
   exec_cmd ('iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ' + mss)
 
-exec_cmd ('iptables -A INPUT   -i ipip+ -j IN_ipip')
-exec_cmd ('iptables -A FORWARD -i ipip+ -j FW_ipip')
-
-for chain in ['INPUT', 'OUTPUT', 'FORWARD']:
-  exec_cmd ('ip6tables -F %s' % chain)
+#exec_cmd ('iptables -A INPUT   -i ipip+ -j IN_ipip')
+#exec_cmd ('iptables -A FORWARD -i ipip+ -j FW_ipip')
 
 for chain in ['IN_ip6ip', 'FW_ip6ip']:
   exec_cmd ('ip6tables -N %s'         % chain)
@@ -51,8 +82,10 @@ for chain in ['IN_ip6ip', 'FW_ip6ip']:
   exec_cmd ('ip6tables -t mangle -F POSTROUTING')
   exec_cmd ('ip6tables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ' + mss)
 
-exec_cmd ('ip6tables -A INPUT   -i ip6ip+ -j IN_ip6ip')
-exec_cmd ('ip6tables -A FORWARD -i ip6ip+ -j FW_ip6ip')
+#exec_cmd ('ip6tables -A INPUT   -i ip6ip+ -j IN_ip6ip')
+#exec_cmd ('ip6tables -A FORWARD -i ip6ip+ -j FW_ip6ip')
+
+olip = get_config_parameter (sys.argv[1], conf, 'tunnel_ip')
 
 for tmp in open (tunlis, 'r'):
   tmp = tmp.rstrip().split (' ')
@@ -74,6 +107,7 @@ for tmp in open (tunlis, 'r'):
 
     exec_cmd ('ip tunnel add %s mode ipip remote %s local %s' % (ipip, orip, olip)  )
     exec_cmd ('ip link set %s up'                             % (ipip)              )
+    exec_cmd ('ip route flush dev %s'                         % (ipip)              )
     exec_cmd ('ip route add %s dev %s'                        % (net, ipip)         )
     exec_cmd ('ip route add %s dev %s'                        % (irip, ipip)        )
     exec_cmd ('ip addr  add %s dev %s'                        % (ilip, ipip)        )
@@ -86,8 +120,8 @@ for tmp in open (tunlis, 'r'):
 
     exec_cmd (  'iptables -I IN_%s -i %s       -s %s -d %s -p icmp -j ACCEPT'
               % (ipip, ipip, irip, ilip) )
-    exec_cmd (  'iptables -I FW_%s -i %s -o %s -s %s               -j ACCEPT'
-              % (ipip, ipip, gwif, net) )
+    exec_cmd (  'iptables -I FW_%s -i %s       -s %s               -j ACCEPT'
+              % (ipip, ipip, net) )
 
     exec_cmd ('ip tunnel add %s mode sit remote %s local %s'  % (ipip6, orip, olip) )
     exec_cmd ('ip link set %s up'                             % (ipip6)             )
@@ -104,5 +138,5 @@ for tmp in open (tunlis, 'r'):
 
     exec_cmd (  'ip6tables -I IN_%s -i %s       -s %s -d %s -p icmpv6 -j ACCEPT'
               % (ipip6, ipip6, irip6, ilip6) )
-    exec_cmd (  'ip6tables -I FW_%s -i %s -o %s -s %s               -j ACCEPT'
-              % (ipip6, ipip6, gwif, net6) )
+    exec_cmd (  'ip6tables -I FW_%s -i %s       -s %s               -j ACCEPT'
+              % (ipip6, ipip6, net6) )
