@@ -3,11 +3,11 @@ DESTDIR = /tmp/rf-dyn-ip-$(USER)
 all:
 
 install-client:
-	@for i in /etc /usr/bin /usr/lib/systemd/system ; \
+	@for i in /etc /usr/sbin /usr/lib/systemd/system ; \
 	do \
 		mkdir -p $(DESTDIR)/$$i ; \
 	done
-	install -m 555 client/rf-dyn-ipip         $(DESTDIR)/usr/bin/
+	install -m 555 client/rf-dyn-ipip         $(DESTDIR)/usr/sbin/
 	install -m 644 client/rf-dyn-ipip.conf    $(DESTDIR)/etc/
 	install -m 644 client/rf-dyn-ipip.service $(DESTDIR)/usr/lib/systemd/system/
 

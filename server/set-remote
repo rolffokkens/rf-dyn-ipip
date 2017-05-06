@@ -14,6 +14,39 @@ vardir = '/var/lib/rf-dyn-ipip'
 tunlis = vardir + '/tunnels.lis'
 tundir = vardir + '/clients.d'
 
+
+class ConfigError (Exception):
+  def __init__(self, value):
+    self.value = value
+  def __str__(self):
+    return repr(self.value)
+
+
+def read_config (filename):
+  try:
+    ret = {}
+    for l in open (filename, "r"):
+      l = l.split ('#')[0].rstrip ()
+      if l == '':
+        continue
+      i = l.split('=')
+      if len (i) != 2:
+        continue
+      ret[i[0]]=i[1]
+    return ret
+  except FileNotFoundError:
+    raise ConfigError ('Unable to open config file "%s"' % filename)
+
+
+def get_config_parameter (config_file, conf, parameter, default = None):
+  try:
+    return conf[parameter]
+  except KeyError:
+    if default != None:
+      return default
+    raise ConfigError ('Missing parameter "%s" in config file "%s"' % (parameter, config_file))
+
+
 class AuthError (Exception):
   def __init__(self, value):
     self.value = value
@@ -28,14 +61,20 @@ def get_file_entry (file, idx, filter):
       return ret
   raise AuthError (filter)
 
+
 def inc_ip (ip):
   a = ip.split ('.')
   a[3] = int (a[3]) + 1
 
   return '%s.%s.%s.%d' % tuple (a)
 
+
 def exec_cmd (cmd):
   r = subprocess.check_output (cmd, shell=True, stderr=subprocess.STDOUT)
+
+conf = read_config ('/etc/rf-dyn-ipip-server.conf')
+
+olip = get_config_parameter ('/etc/rf-dyn-ipip-server.conf', conf, 'tunnel_ip')
 
 try:
   (ipip, username, net, ilip, ipip6, net6, ilip6) = get_file_entry (tunlis, 1, username)
@@ -52,8 +91,8 @@ try:
     exec_cmd ('ip tunnel change %s remote %s' % (ipip6, nrip))
     open (tuncfgfile, 'w').write ('%s %s\n' % (nrip, password))
 
-  print (   'status=OK\nip4pubnet=%s\nip4local=%s\nip4remote=%s\nip6local=%s\nip6remote=%s\nip6pubnet=%s' \
-          % (net, ilip, irip, ilip6, irip6, net6))
+  print (   'status=OK\ntunnelip=%s\nip4pubnet=%s\nip4local=%s\nip4remote=%s\nip6local=%s\nip6remote=%s\nip6pubnet=%s' \
+          % (olip, net, ilip, irip, ilip6, irip6, net6))
 
 except AuthError:
   print ('status=Authentication error', file=sys.stderr)

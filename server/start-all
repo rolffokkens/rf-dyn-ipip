@@ -9,11 +9,13 @@ vardir = '/var/lib/rf-dyn-ipip'
 tunlis = vardir + '/tunnels.lis'
 tundir = vardir + '/clients.d'
 
+
 class ConfigError (Exception):
   def __init__(self, value):
     self.value = value
   def __str__(self):
     return repr(self.value)
+
 
 def read_config (filename):
   try:
@@ -30,11 +32,13 @@ def read_config (filename):
   except FileNotFoundError:
     raise ConfigError ('Unable to open config file "%s"' % filename)
 
+
 def inc_ip (ip):
   a = ip.split ('.')
   a[3] = int (a[3]) + 1
 
   return '%s.%s.%s.%d' % tuple (a)
+
 
 def exec_cmd (cmd):
   try:
@@ -45,6 +49,7 @@ def exec_cmd (cmd):
   except subprocess.CalledProcessError:
     return False
 
+
 def get_config_parameter (config_file, conf, parameter, default = None):
   try:
     return conf[parameter]
@@ -53,39 +58,25 @@ def get_config_parameter (config_file, conf, parameter, default = None):
       return default
     raise ConfigError ('Missing parameter "%s" in config file "%s"' % (parameter, config_file))
 
-if len(sys.argv) != 2:
-  print ("Bad number of arguments", file=sys.stderr, flush=True)
-  exit (1)
-
-conf = read_config (sys.argv[1])
-
-#for chain in ['INPUT', 'OUTPUT', 'FORWARD']:
-#  exec_cmd ('iptables  -F %s' % chain)
-#  exec_cmd ('ip6tables -F %s' % chain)
+conf = read_config ('/etc/rf-dyn-ipip-server.conf')
 
 for chain in ['IN_ipip', 'FW_ipip']:
-  exec_cmd ('iptables -N %s'         % chain)
-  exec_cmd ('iptables -F %s'         % chain)
-  exec_cmd ('iptables -A %s -j DROP' % chain)
+  exec_cmd ('iptables -N %s'                  % chain)
+  exec_cmd ('iptables -F %s'                  % chain)
+  exec_cmd ('iptables -A %s -i ipip+ -j DROP' % chain)
 
   exec_cmd ('iptables -t mangle -F POSTROUTING')
   exec_cmd ('iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ' + mss)
 
-#exec_cmd ('iptables -A INPUT   -i ipip+ -j IN_ipip')
-#exec_cmd ('iptables -A FORWARD -i ipip+ -j FW_ipip')
-
 for chain in ['IN_ip6ip', 'FW_ip6ip']:
-  exec_cmd ('ip6tables -N %s'         % chain)
-  exec_cmd ('ip6tables -F %s'         % chain)
-  exec_cmd ('ip6tables -A %s -j DROP' % chain)
+  exec_cmd ('ip6tables -N %s'                   % chain)
+  exec_cmd ('ip6tables -F %s'                   % chain)
+  exec_cmd ('ip6tables -A %s -i ip6ip+ -j DROP' % chain)
 
   exec_cmd ('ip6tables -t mangle -F POSTROUTING')
   exec_cmd ('ip6tables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ' + mss)
 
-#exec_cmd ('ip6tables -A INPUT   -i ip6ip+ -j IN_ip6ip')
-#exec_cmd ('ip6tables -A FORWARD -i ip6ip+ -j FW_ip6ip')
-
-olip = get_config_parameter (sys.argv[1], conf, 'tunnel_ip')
+olip = get_config_parameter ('/etc/rf-dyn-ipip-server.conf', conf, 'tunnel_ip')
 
 for tmp in open (tunlis, 'r'):
   tmp = tmp.rstrip().split (' ')

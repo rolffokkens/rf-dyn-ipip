@@ -1,6 +1,11 @@
 #!/usr/bin/python3
 
-import requests, time, signal, os, subprocess, sys
+import requests, time, signal, os, subprocess, sys, netifaces
+
+
+def exec_cmd (cmd):
+  r = subprocess.check_output (cmd, shell=True, stderr=subprocess.STDOUT)
+
 
 class SetLocalIPFailure (Exception):
   def __init__(self, value):
@@ -8,11 +13,13 @@ class SetLocalIPFailure (Exception):
   def __str__(self):
     return repr(self.value)
 
+
 class ConfigError (Exception):
   def __init__(self, value):
     self.value = value
   def __str__(self):
     return repr(self.value)
+
 
 class PosixSigHUP (Exception):
   def __init__(self, value):
@@ -20,8 +27,10 @@ class PosixSigHUP (Exception):
   def __str__(self):
     return repr(self.value)
 
+
 def sighup_handler (signum, frame):
     raise PosixSigHUP (signum)
+
 
 def read_config (filename):
   try:
@@ -38,9 +47,13 @@ def read_config (filename):
   except FileNotFoundError:
     raise ConfigError ('Unable to open config file "%s"' % filename)
 
-def register_endpoint (regurl, username, password):
-  payload = {'password': password}
-  url     = regurl + '?id=' + username
+
+def register_endpoint (regurl, username, password, ip4device, ip6device):
+  payload  = {'password': password}
+  url      = regurl + '?id=' + username
+
+  (gw,dev) = netifaces.gateways()['default'][netifaces.AF_INET]
+  addr     = netifaces.ifaddresses(dev)[netifaces.AF_INET][0]['addr']
 
   try:
     r = requests.post(url, data=payload, timeout=1)
@@ -68,9 +81,18 @@ def register_endpoint (regurl, username, password):
   if ret['status'] != 'OK':
     raise SetLocalIPFailure (ret['status'])
 
+  tunnelip  = ret.get('tunnelip')
+  ip4local  = ret.get('ip4local')
+  ip4remote = ret.get('ip4remote')
+  ip6local  = ret.get('ip6local')
+  ip6remote = ret.get('ip6remote')
+
+  exec_cmd ('ip tunnel change %s local %s remote %s\n' % (ip4device, addr, tunnelip))
+  exec_cmd ('ip tunnel change %s local %s remote %s\n' % (ip6device, addr, tunnelip))
+
   print ("Local IP registration succeeded", file=sys.stderr, flush=True)
 
-  return (ret.get('ip4local'), ret.get('ip4remote'), ret.get('ip6local'), ret.get('ip6remote'))
+  return (ip4local, ip4remote, ip6local, ip6remote)
 
 
 def do_ping (version, src_ip, dst_ip):
@@ -80,6 +102,7 @@ def do_ping (version, src_ip, dst_ip):
   except subprocess.CalledProcessError:
     return False
 
+
 def get_config_parameter (config_file, conf, parameter, default = None):
   try:
     return conf[parameter]
@@ -87,6 +110,7 @@ def get_config_parameter (config_file, conf, parameter, default = None):
     if default != None:
       return default
     raise ConfigError ('Missing parameter "%s" in config file "%s"' % (parameter, config_file))
+
 
 def mainloop (config_file):
   signal.signal(signal.SIGHUP, sighup_handler)
@@ -99,8 +123,10 @@ def mainloop (config_file):
       password    = get_config_parameter (config_file, conf, 'password')
       regurl      = get_config_parameter (config_file, conf, 'regurl')
       retry_delay = get_config_parameter (config_file, conf, 'retry_delay', '60')
+      ip4device   = get_config_parameter (config_file, conf, 'ip4device')
+      ip6device   = get_config_parameter (config_file, conf, 'ip6device')
 
-      (iplocal, ipremote, ip6local, ip6remote) = register_endpoint (regurl, username, password)
+      (iplocal, ipremote, ip6local, ip6remote) = register_endpoint (regurl, username, password, ip4device, ip6device)
 
       try:
         while True:
@@ -125,8 +151,4 @@ def mainloop (config_file):
     print (err.value, file=sys.stderr, flush=True)
     exit (1)
 
-if len(sys.argv) != 2:
-  print ("Bad number of arguments", file=sys.stderr, flush=True)
-  exit (1)
-
-mainloop (sys.argv[1])
+mainloop ('/etc/rf-dyn-ipip.conf')

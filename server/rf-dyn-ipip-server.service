@@ -5,7 +5,7 @@ After=network.target network-online.target time-sync.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/share/rf-dyn-ipip/start-all /etc/rf-dyn-ipip-server.conf
+ExecStart=/usr/share/rf-dyn-ipip/start-all
 
 [Install]
 WantedBy=multi-user.target

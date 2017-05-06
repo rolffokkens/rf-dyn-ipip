@@ -5,7 +5,7 @@ After=network.target network-online.target time-sync.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/rf-dyn-ipip /etc/rf-dyn-ipip.conf
+ExecStart=/usr/sbin/rf-dyn-ipip
 ExecReload=/usr/bin/kill -HUP $MAINPID
 
 [Install]
