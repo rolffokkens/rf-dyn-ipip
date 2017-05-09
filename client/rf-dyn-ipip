@@ -47,12 +47,39 @@ def read_config (filename):
   except FileNotFoundError:
     raise ConfigError ('Unable to open config file "%s"' % filename)
 
+
 def check_addresses (ip1, ip2, pfx1, pfx2, text):
   if ipaddress.ip_address(ip1) != ipaddress.ip_address(ip2):
     raise SetLocalIPFailure (text)
   if pfx1 != pfx2:
     raise SetLocalIPFailure (text)
   return
+
+
+def check_tun_addr (dev, ipver, ifaddr, local, peer):
+  map_pfx2str = { 4: (32,  ipaddress.IPv4Address._prefix_from_ip_string)
+                , 6: (128, ipaddress.IPv6Address._prefix_from_ip_string) }
+
+  (pfx, pfx2str) = map_pfx2str[ipver]
+
+  for addr in ifaddr:
+    if ipaddress.ip_address (addr['addr']) != ipaddress.ip_address (local):
+      continue
+
+    a_pfx = pfx2str (addr['netmask'])
+
+    if 'peer' in addr:
+      if    ipaddress.ip_address(addr['peer']) != ipaddress.ip_address(peer) \
+         or a_pfx != pfx:
+        raise SetLocalIPFailure ('Bad peer IPv%d address/prefix on %s' % (ipver, dev))
+    else:
+      if a_pfx != pfx - 1:
+        raise SetLocalIPFailure ('Bad IPv%d address/prefix on %s' % (ipver, dev))
+
+    return
+
+  raise SetLocalIPFailure ('Missing IPv4 address %s on %s' % (local, dev))
+
 
 def register_endpoint (regurl, username, password, ip4device, ip6device):
   payload  = {'password': password}
@@ -94,20 +121,10 @@ def register_endpoint (regurl, username, password, ip4device, ip6device):
   ip6remote = ret.get('ip6remote')
 
   ifaddr   = netifaces.ifaddresses(ip4device)[netifaces.AF_INET]
-  if len(ifaddr) != 1:
-    raise SetLocalIPFailure ('Bad #IPv4 addesses on %s' % ip4device)
+  check_tun_addr (ip4device, 4, ifaddr, ip4local, ip4remote)
 
-  ifaddr   = ifaddr[0]
-  # print ("netmask: %s addr: %s peer: %s\n" % (ifaddr['netmask'], ifaddr['addr'], ifaddr['peer']))
-  prefix = ipaddress.IPv4Address._prefix_from_ip_string(ifaddr['netmask'])
-  check_addresses (ip4local,  ifaddr['addr'], 32, prefix, ('Bad IPv4 address on %s'      % ip4device))
-  check_addresses (ip4remote, ifaddr['peer'], 32, prefix, ('Bad peer IPv4 address on %s' % ip4device))
-
-  ifaddr   = netifaces.ifaddresses(ip6device)[netifaces.AF_INET6][0]
-  # print ("netmask: %s addr: %s peer: %s\n" % (ifaddr['netmask'], ifaddr['addr'], ifaddr['peer']))
-  prefix = ipaddress.IPv6Address._prefix_from_ip_string(ifaddr['netmask'])
-  check_addresses (ip6local,  ifaddr['addr'], 128, prefix, ('Bad IPv6 address on %s'      % ip6device))
-  check_addresses (ip6remote, ifaddr['peer'], 128, prefix, ('Bad peer IPv6 address on %s' % ip6device))
+  ifaddr   = netifaces.ifaddresses(ip6device)[netifaces.AF_INET6]
+  check_tun_addr (ip6device, 6, ifaddr, ip6local, ip6remote)
 
   exec_cmd ('ip tunnel change %s local %s remote %s\n' % (ip4device, addr, tunnelip))
   exec_cmd ('ip tunnel change %s local %s remote %s\n' % (ip6device, addr, tunnelip))
