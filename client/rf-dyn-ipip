@@ -48,11 +48,16 @@ def read_config (filename):
     raise ConfigError ('Unable to open config file "%s"' % filename)
 
 
-def check_tun_addr (dev, ipver, ifaddr, local, peer):
-  map_pfx2str = { 4: (32,  ipaddress.IPv4Address._prefix_from_ip_string)
-                , 6: (128, ipaddress.IPv6Address._prefix_from_ip_string) }
+def check_tun_addr (dev, ipver, local, peer):
+  map_pfx2str = { 4: (32,  ipaddress.IPv4Address._prefix_from_ip_string, netifaces.AF_INET )
+                , 6: (128, ipaddress.IPv6Address._prefix_from_ip_string, netifaces.AF_INET6) }
 
-  (pfx, pfx2str) = map_pfx2str[ipver]
+  (pfx, pfx2str, af) = map_pfx2str[ipver]
+
+  try:
+    ifaddr   = netifaces.ifaddresses(dev)[af]
+  except ValueError:
+    raise SetLocalIPFailure ('Bad IPv%d device %s' % (ipver, dev))
 
   for addr in ifaddr:
     if ipaddress.ip_address (addr['addr']) != ipaddress.ip_address (local):
@@ -112,11 +117,11 @@ def register_endpoint (regurl, username, password, ip4device, ip6device):
   ip6local  = ret.get('ip6local')
   ip6remote = ret.get('ip6remote')
 
-  ifaddr   = netifaces.ifaddresses(ip4device)[netifaces.AF_INET]
-  check_tun_addr (ip4device, 4, ifaddr, ip4local, ip4remote)
+  # ifaddr   = netifaces.ifaddresses(ip4device)[netifaces.AF_INET]
+  check_tun_addr (ip4device, 4, ip4local, ip4remote)
 
-  ifaddr   = netifaces.ifaddresses(ip6device)[netifaces.AF_INET6]
-  check_tun_addr (ip6device, 6, ifaddr, ip6local, ip6remote)
+  # ifaddr   = netifaces.ifaddresses(ip6device)[netifaces.AF_INET6]
+  check_tun_addr (ip6device, 6, ip6local, ip6remote)
 
   exec_cmd ('ip tunnel change %s local %s remote %s\n' % (ip4device, addr, tunnelip))
   exec_cmd ('ip tunnel change %s local %s remote %s\n' % (ip6device, addr, tunnelip))
@@ -137,6 +142,7 @@ def do_ping (version, src_ip, dst_ip):
     r = subprocess.check_output ('ping' + version + ' -W 1 -c 1 -I ' + src_ip + ' ' + dst_ip, shell = True)
     return True
   except subprocess.CalledProcessError:
+    print ('Ping %s failed' % dst_ip, file=sys.stderr, flush=True)
     return False
 
 
@@ -169,10 +175,9 @@ def mainloop (config_file):
         while True:
           time.sleep (5)
 
-          if do_ping ('', iplocal, ipremote) and do_ping ('6', ip6local, ip6remote):
+          if do_ping ('', iplocal, ipremote) & do_ping ('6', ip6local, ip6remote):
               continue
 
-          print ('Ping failed', file=sys.stderr, flush=True)
           try:
             (iplocal, ipremote, ip6local, ip6remote) = register_endpoint (regurl, username, password, ip4device, ip6device)
           except SetLocalIPFailure as err:
