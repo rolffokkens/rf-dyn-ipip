@@ -63,7 +63,7 @@ def check_tun_addr (dev, ipver, local, peer):
     if ipaddress.ip_address (addr['addr']) != ipaddress.ip_address (local):
       continue
 
-    a_pfx = pfx2str (addr['netmask'])
+    a_pfx = pfx2str (addr['netmask'].split('/')[0])
 
     if 'peer' in addr:
       if    ipaddress.ip_address(addr['peer']) != ipaddress.ip_address(peer) \
