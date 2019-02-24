@@ -2,7 +2,6 @@
 
 import subprocess, sys
 
-olip='89.188.16.159'
 mss='1440'
 
 vardir = '/var/lib/rf-dyn-ipip'
